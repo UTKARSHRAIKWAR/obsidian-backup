@@ -1,5 +1,0 @@
-# obsidian-backup
-
-
-sfd
-testin
