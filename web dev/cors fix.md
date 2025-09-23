@@ -11,7 +11,7 @@ const {user} = await API.post({})
 
 
 backend - const corsOptions = {
-origin: "https://urlshortmini.netlify.app", // Replace with your frontend's origin
+origin: "backend_url", // Replace with your frontend's origin
 credentials: true,
 };
 app.use(cors(corsOptions));
