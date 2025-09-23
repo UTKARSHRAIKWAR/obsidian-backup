@@ -15,3 +15,4 @@ origin: "https://urlshortmini.netlify.app", // Replace with your frontend's orig
 credentials: true,
 };
 app.use(cors(corsOptions));
+W
