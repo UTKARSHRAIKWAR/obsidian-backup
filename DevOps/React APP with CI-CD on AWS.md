@@ -1,127 +1,112 @@
-# 🚀 Deploy React App to AWS EC2 with Nginx + SSL + GitHub Actions (CI/CD)
+# 🚀 Hosting React (Vite) App on AWS EC2 with Nginx + GitHub Actions (CI/CD)
 
-## 🖥️ 1. Spin up an EC2 Instance
-- Launch an **Ubuntu EC2** instance from AWS Console.  
-- Open **Security Groups** and allow:
-  - `80` (HTTP) 🌐
-  - `443` (HTTPS) 🔒
-  - `22` (SSH) 🔑
+## 1. Launch EC2 Instance
+- Create an **Ubuntu** EC2 instance.
+- Download the `.pem` key and SSH into your server:
 
----
+```bash
+chmod 400 aws.pem
+ssh -i aws.pem ubuntu@<EC2_PUBLIC_IP>
+```
 
-## 📦 2. Install Dependencies on EC2
+- Update server:
 ```bash
 sudo apt update && sudo apt upgrade -y
-sudo apt install nginx certbot python3-certbot-nginx nodejs npm git -y
 ```
 
 ---
 
-## ⚛️ 3. Build React App
-On your EC2 or locally:
+## 2. Install Nginx
 ```bash
-npm install
-npm run build   # creates dist/ folder (if Vite) or build/ (if CRA)
+sudo apt install nginx -y
+sudo systemctl enable nginx
+sudo systemctl start nginx
 ```
-
-Copy output to web root:
-```bash
-sudo rm -rf /var/www/html/*
-sudo cp -r dist/* /var/www/html/
-```
-
----
-
-## 🌐 4. Configure Nginx
-Edit site config:
-```bash
-sudo nano /etc/nginx/sites-available/reactapp
-```
-
-Paste this:
-```nginx
-server {
-    listen 80;
-    server_name ranjeetkumar.tech www.ranjeetkumar.tech;
-
-    root /var/www/html;
-    index index.html;
-
-    location / {
-        try_files $uri /index.html;
-    }
-}
-
-server {
-    listen 443 ssl;
-    server_name ranjeetkumar.tech www.ranjeetkumar.tech;
-
-    ssl_certificate /etc/letsencrypt/live/ranjeetkumar.tech/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/ranjeetkumar.tech/privkey.pem;
-
-    root /var/www/html;
-    index index.html;
-
-    location / {
-        try_files $uri /index.html;
-    }
-}
-
-server {
-    listen 80;
-    server_name ranjeetkumar.tech www.ranjeetkumar.tech;
-    return 301 https://$host$request_uri;
-}
-```
-
-Enable config:
-```bash
-sudo ln -s /etc/nginx/sites-available/reactapp /etc/nginx/sites-enabled/
-sudo nginx -t
-sudo systemctl restart nginx
-```
-
----
-
-## 🔒 5. Setup SSL with Let’s Encrypt
-```bash
-sudo certbot --nginx -d ranjeetkumar.tech -d www.ranjeetkumar.tech
-```
-
----
-
-## 🌍 6. Point Domain to EC2
-In your domain registrar:
-- Use **AWS Route53 nameservers**  
-- Add records:  
-  - `A` → `@` → EC2 Public IP  
-  - `CNAME` → `www` → `@`
 
 Check:
 ```bash
-dig +short ranjeetkumar.tech
-dig +short www.ranjeetkumar.tech
+curl http://localhost
 ```
+✅ Should show **Welcome to nginx!**
 
 ---
 
-## ⚡ 7. Setup CI/CD with GitHub Actions
-### 🔑 a) Generate SSH Key
-On local:
+## 3. Configure Security Group
+- Open EC2 **Security Group** → **Inbound Rules**.
+- Allow:
+  - `22` (SSH)
+  - `80` (HTTP)
+  - `443` (HTTPS)
+
+Now test `http://<EC2_PUBLIC_IP>` → should show Nginx page.
+
+---
+
+## 4. Deploy React (Vite) Build Manually (first time)
+On your **local machine**:
 ```bash
-ssh-keygen -t ed25519 -C "github-deploy" -f github-deploy-key
+npm run build   # creates dist/ folder
 ```
-- Copy **public key** → EC2 → `~/.ssh/authorized_keys`  
-- Add **private key** to GitHub Secrets → `EC2_SSH_KEY`  
 
-Also add:
-- `EC2_HOST` → your EC2 public IP  
-- `EC2_USER` → `ubuntu`
+Upload files to EC2:
+```bash
+scp -i aws.pem -r dist/* ubuntu@<EC2_PUBLIC_IP>:/var/www/html/
+```
+
+Reload Nginx:
+```bash
+sudo systemctl reload nginx
+```
+
+Now open `http://<EC2_PUBLIC_IP>` → should load React app.
 
 ---
 
-### ⚙️ b) Create Workflow  
-📂 `.github/workflows/deploy.yml`
+## 5. Nginx Config for React SPA
+Edit config:
+```bash
+sudo nano /etc/nginx/sites-available/react-app
+```
+
+Example:
+```nginx
+server {
+    listen 80;
+    server_name _;
+
+    root /var/www/html;
+    index index.html;
+
+    location / {
+        try_files $uri /index.html;
+    }
+}
+```
+
+Enable & reload:
+```bash
+sudo ln -s /etc/nginx/sites-available/react-app /etc/nginx/sites-enabled/
+sudo nginx -t
+sudo systemctl reload nginx
+```
+
+---
+
+## 6. Enable HTTPS (SSL)
+Install Certbot:
+```bash
+sudo apt install certbot python3-certbot-nginx -y
+```
+
+Run:
+```bash
+sudo certbot --nginx -d yourdomain.com -d www.yourdomain.com
+```
+
+---
+
+## 7. CI/CD with GitHub Actions
+Inside your repo → `.github/workflows/deploy.yml`
 
 ```yaml
 name: Deploy React to EC2
@@ -131,56 +116,69 @@ on:
     branches: [main]
 
 jobs:
-  deploy:
+  build-and-deploy:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repo
-        uses: actions/checkout@v3
+      - name: 📥 Checkout repo
+        uses: actions/checkout@v4
 
-      - name: Install Node.js
-        uses: actions/setup-node@v3
+      - name: ⚙️ Setup Node.js
+        uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: "18"
 
-      - name: Install dependencies
-        run: npm install
+      - name: 📦 Install dependencies
+        run: npm ci
 
-      - name: Build React app
-        run: npm run build
+      - name: 🏗️ Build React app
+        run: npm run build # Vite → dist/
 
-      - name: Deploy to EC2
-        uses: appleboy/ssh-action@v0.1.10
-        with:
-          host: ${{ secrets.EC2_HOST }}
-          username: ${{ secrets.EC2_USER }}
-          key: ${{ secrets.EC2_SSH_KEY }}
-          script: |
-            sudo rm -rf /var/www/html/*
-            cp -r dist/* /var/www/html/
-            sudo systemctl reload nginx
+      - name: 🔑 Prepare SSH key
+        run: |
+          echo "${{ secrets.EC2_SSH_KEY }}" > ./deploy_key
+          chmod 600 ./deploy_key
+
+      - name: 📡 Ensure rsync exists
+        run: sudo apt-get update && sudo apt-get install -y rsync
+
+      - name: 🚚 Deploy dist/ to EC2 via rsync
+        env:
+          SSH_PORT: 22
+          EC2_USER: ${{ secrets.EC2_USER }}
+          EC2_HOST: ${{ secrets.EC2_HOST }}
+          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH || '/var/www/html' }}
+        run: |
+          rsync -avz --delete -e "ssh -i ./deploy_key -o StrictHostKeyChecking=no -p $SSH_PORT" dist/ ${EC2_USER}@${EC2_HOST}:${DEPLOY_PATH}/
+
+      - name: 🔄 Reload Nginx
+        run: |
+          ssh -i ./deploy_key -o StrictHostKeyChecking=no -p 22 ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} "sudo systemctl reload nginx"
 ```
 
 ---
 
-## ✅ 8. Deploy & Test
-1. Commit and push to `main` branch:  
-   ```bash
-   git add .
-   git commit -m "CI/CD setup"
-   git push origin main
-   ```
-2. Check **Actions tab** in GitHub.  
-3. Visit 🌐 `https://ranjeetkumar.tech` — your changes are live! 🎉  
+## 8. Setup GitHub Secrets
+In your repo → **Settings > Secrets and variables > Actions** → Add:
+- `EC2_SSH_KEY` → contents of your `.pem`
+- `EC2_USER` → `ubuntu`
+- `EC2_HOST` → your EC2 Public IP or domain
+- `DEPLOY_PATH` → `/var/www/html`
 
 ---
 
-## 📊 9. Visual Pipeline (Mermaid)
-```mermaid
-flowchart TD
-    A[Push code to GitHub] --> B[GitHub Actions Workflow]
-    B --> C[Build React app]
-    C --> D[Deploy dist/ to EC2]
-    D --> E[Nginx serves app with SSL]
-    E --> F[User visits domain ✅]
-```
+## 9. Workflow
+1. Push code to `main` branch.
+2. GitHub Actions:
+   - Builds React app → `dist/`
+   - Rsyncs to `/var/www/html`
+   - Reloads Nginx
+3. Your site auto-updates 🎉
+
+---
+
+# ✅ Summary
+- Nginx serves static files from `/var/www/html`.
+- GitHub Actions automates deployment with rsync.
+- Certbot adds SSL for HTTPS.
+- Every push to **main** → auto deploy to EC2.
