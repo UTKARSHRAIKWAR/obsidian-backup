@@ -44,7 +44,7 @@ Now test `http://<EC2_PUBLIC_IP>` → should show Nginx page.
 
 ## 4. Deploy React (Vite) Build Manually (first time)
 On your **local machine**:
-```bash
+	```bash
 npm run build   # creates dist/ folder
 ```
 
