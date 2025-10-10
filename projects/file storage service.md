@@ -1,209 +1,153 @@
-# 📂 File Storage Service Backend – Roadmap
 
-## 1. 📝 Project Planning
+# 📁 File Storage Service Backend
 
--  Define project scope (Google Drive / Dropbox-like service).
-    
--  Decide storage mode:
-    
-    - Local storage (Multer, `uploads/` folder).
-        
-    - Cloud storage (AWS S3 / GCP / Azure).
-        
--  Choose Tech Stack:
-    
-    - Backend: Node.js + Express (or NestJS).
-        
-    - Database: MongoDB (for flexible schema) / PostgreSQL (if relational).
-        
-    - Auth: JWT + bcrypt.
-        
-    - Optional: Redis for caching.
-        
--  Set milestones (MVP → Advanced Features).
-    
+A production-grade backend for a **File Storage System** built with **Node.js, Express, MongoDB, and AWS S3**.
+Uses **Multer** for local temporary uploads and S3 for permanent cloud storage.
 
 ---
 
-## 2. 🏗️ System Design
-
--  Create **ER Diagram**:
-    
-    - `Users`
-        
-    - `Files`
-        
-    - `SharedFiles` (optional if complex sharing).
-        
--  Define **API Endpoints**:
-    
-    - Auth: register, login.
-        
-    - File management: upload, download, delete, list.
-        
-    - Sharing: public/private, shared users.
-        
-    - Admin: monitor usage, set quotas.
-        
--  Decide file size limits and storage quota per user.
-    
--  Plan **security**:
-    
-    - JWT token validation.
-        
-    - File access control (only owner/shared users can access).
-        
-    - Rate limiting.
-        
+## 🧩 Overview
+- Users can upload, download, list, and delete files.
+- Files are temporarily stored locally, then uploaded to AWS S3.
+- Generates **pre-signed URLs** for secure access.
+- Stores metadata (name, size, key, owner, etc.) in MongoDB.
 
 ---
 
-## 3. ⚙️ Backend Setup
-
--  Initialize project:
-    
-    `mkdir file-storage-backend && cd file-storage-backend npm init -y npm install express mongoose multer bcrypt jsonwebtoken dotenv cors`
-    
--  Setup project structure:
-    
-    `├── src/ │   ├── models/ │   ├── routes/ │   ├── controllers/ │   ├── middlewares/ │   ├── config/ │   └── server.js ├── uploads/   # (if local storage) ├── .env └── package.json`
-    
--  Connect to MongoDB using Mongoose.
-    
--  Create basic Express server.
-    
+## ⚙️ Tech Stack
+| Layer | Technology |
+|-------|-------------|
+| Backend | Node.js, Express |
+| Database | MongoDB |
+| Authentication | JWT |
+| Storage | AWS S3 |
+| Upload Middleware | Multer |
+| Cloud SDK | AWS SDK v3 |
+| Other Tools | dotenv, fs, bcrypt, jsonwebtoken |
 
 ---
 
-## 4. 🔐 Authentication Module
-
--  Implement **user registration** with bcrypt password hashing.
-    
--  Implement **login** with JWT token generation.
-    
--  Create middleware to verify JWT and attach user to request.
-    
--  Add role support (admin, user).
-    
-
----
-
-## 5. 📂 File Management Module
-
--  Setup Multer for file uploads.
-    
--  Create API:
-    
-    - `POST /files/upload` → Upload a file.
-        
-    - `GET /files/:id` → Download a file.
-        
-    - `DELETE /files/:id` → Delete a file.
-        
-    - `GET /files` → List all user files.
-        
--  Save file metadata in MongoDB (fileName, path, type, size, createdAt, ownerId).
-    
--  Implement file access control:
-    
-    - Only owner can view/delete.
-        
-    - If `isPublic = true`, anyone with link can access.
-        
+## 📁 Project Structure
+```
+backend/
+├── src/
+│   ├── config/
+│   │   └── s3.js
+│   ├── controllers/
+│   │   └── file.controller.js
+│   ├── middleware/
+│   │   ├── auth.js
+│   │   └── upload.js
+│   ├── models/
+│   │   └── files.model.js
+│   ├── routes/
+│   │   └── file.routes.js
+│   ├── utils/
+│   │   └── logger.js
+│   └── server.js
+├── .env
+├── package.json
+└── README.md
+```
 
 ---
 
-## 6. 🤝 File Sharing & Access Control
-
--  Add **public file link generation** (`/files/share/:id`).
-    
--  Add **sharedWith[]** array in File schema.
-    
--  API to share file with specific users.
-    
--  API to revoke access.
-    
+## 🧠 Flow
+1. User logs in → gets JWT token.
+2. User uploads a file → multer saves locally.
+3. File uploaded to AWS S3 via `PutObjectCommand`.
+4. Local file deleted.
+5. Metadata stored in MongoDB.
+6. Generate **signed URL** for secure download.
 
 ---
 
-## 7. 📊 User & Admin Dashboard (API level)
-
--  Track **storageUsed** for each user.
-    
--  Enforce **storage quota**.
-    
--  Admin endpoints:
-    
-    - `GET /admin/users` → list users with storage usage.
-        
-    - `PUT /admin/limit/:userId` → set user storage limit.
-        
-
----
-
-## 8. 🧪 Testing & Validation
-
--  Write Postman collection for APIs.
-    
--  Unit tests (Jest / Mocha).
-    
--  Test:
-    
-    - Upload/download flow.
-        
-    - Unauthorized access attempt.
-        
-    - Public file sharing.
-        
-    - Quota enforcement.
-        
+## 🪣 AWS S3 Setup
+1. Create a bucket in S3.
+2. Create IAM user → assign permissions:
+   - `s3:PutObject`
+   - `s3:GetObject`
+   - `s3:DeleteObject`
+3. Add keys to `.env`:
+   ```
+   AWS_BUCKET_NAME=my-bucket
+   AWS_ACCESS_KEY_ID=xxxx
+   AWS_SECRET_ACCESS_KEY=xxxx
+   AWS_REGION=ap-south-1
+   ```
+4. Enable **Block Public Access** for safety.
 
 ---
 
-## 9. 🚀 Deployment
+## 🧰 Multer Setup
+- Multer saves temporary files to `/uploads`.
+- Once uploaded to S3 → file deleted from local.
+```js
+import multer from "multer";
 
--  Setup `.env` for production.
-    
--  Deploy backend:
-    
-    - Render / Railway / AWS EC2.
-        
--  Storage:
-    
-    - Local → mount persistent volume.
-        
-    - Cloud → integrate AWS S3 (recommended for production).
-        
--  Setup NGINX/Cloudflare for secure file delivery.
-    
+const storage = multer.diskStorage({
+  destination: "uploads/",
+  filename: (req, file, cb) => cb(null, Date.now() + "-" + file.originalname)
+});
+
+export default multer({ storage });
+```
 
 ---
 
-## 10. 📈 Scaling & Advanced Features
-
--  **Versioning** → keep multiple versions of a file.
-    
--  **Search API** → filter by filename, type, date.
-    
--  **Redis caching** for frequently accessed files.
-    
--  **Chunked Uploads** for large files.
-    
--  **Background Workers** (Bull.js + Redis) for processing files (e.g., virus scan, thumbnail generation).
-    
--  **Monitoring** with Prometheus + Grafana.
-    
+## 📦 API Endpoints
+| Method | Route | Description | Auth |
+|--------|--------|--------------|------|
+| `POST` | `/api/upload` | Upload file to S3 | ✅ |
+| `GET` | `/api/files` | List user files | ✅ |
+| `GET` | `/api/files/:id` | Get file (signed URL) | ✅ |
+| `DELETE` | `/api/files/:id` | Delete file | ✅ |
 
 ---
 
-## ✅ Milestone Checklist
+## 🧾 Example Response
+```json
+{
+  "success": true,
+  "file": {
+    "_id": "652d23f3b4d9a2",
+    "fileName": "resume.pdf",
+    "url": "https://s3.amazonaws.com/...",
+    "size": 12345
+  }
+}
+```
 
--  MVP: Auth + File Upload/Download/Delete.
-    
--  Sharing & Access Control.
-    
--  Admin Dashboard.
-    
--  Deployment.
-    
--  Advanced Features.
+---
+
+## 🔒 Security Best Practices
+- Never expose AWS credentials.
+- Use **signed URLs** instead of public links.
+- Validate file types and size.
+- Clean up local temp files.
+- Use HTTPS in production.
+- Configure S3 CORS properly.
+
+---
+
+## 🚀 Deployment Notes
+- Use **PM2** or **Docker** for backend.
+- Use **Nginx** as reverse proxy.
+- Configure **ENV variables** securely.
+- Add **rate limiting** and **helmet** for protection.
+
+---
+
+## 🧩 Future Enhancements
+- File sharing via short links.
+- Folder management.
+- File preview support.
+- Expiry for signed URLs.
+- Storage analytics dashboard.
+
+---
+
+## 📘 Author
+**Utkarsh Raikwar**  
+Full Stack Developer | Cloud Enthusiast  
+GitHub: [github.com/utkarshraikwar](https://github.com/utkarshraikwar)
