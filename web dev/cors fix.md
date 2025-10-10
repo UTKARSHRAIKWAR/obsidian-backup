@@ -11,8 +11,7 @@ const {user} = await API.post({})
 
 
 backend - const corsOptions = {
-origin: "backend_url", // Replace with your frontend's origin
+origin: "frontend_url", // Replace with your frontend's origin
 credentials: true,
 };
 app.use(cors(corsOptions));
-W
